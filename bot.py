@@ -1,7 +1,9 @@
+import os
 import random
 import asyncio
-import signal
-from telegram import Update, BotCommand
+import logging
+
+from telegram import Update
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -9,20 +11,37 @@ from telegram.ext import (
     filters,
     ContextTypes
 )
-from google import genai
+import google.generativeai as genai
 
-# Настройка Gemini AI
-client = genai.Client(api_key="AIzaSyCD3lMA7zuR7dynDaGEotgU-zCo-wZnQkM")
+# Логирование — обязательно для Render
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
-# Токен бота
-TOKEN = "8217181234:AAE7fk3O8Gry41CNZwZDGOvyVOqmEqpJ6ak"
+# Ключи из переменных окружения Render (обязательно пропиши их там!)
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Хозяин бота
+if not TELEGRAM_TOKEN:
+    raise ValueError("TELEGRAM_TOKEN не задан в переменных окружения Render!")
+if not GEMINI_API_KEY:
+    raise ValueError("GEMINI_API_KEY не задан в переменных окружения Render!")
+
+# Настройка Gemini
+try:
+    genai.configure(api_key=GEMINI_API_KEY)
+    gemini_model = genai.GenerativeModel('gemini-1.5-flash')
+    logger.info("Gemini успешно подключён")
+except Exception as e:
+    logger.critical(f"Ошибка подключения Gemini: {e}")
+    gemini_model = None
+
+# ── Твои константы ────────────────────────────────────────────────────────
+
 MASTER_USERNAME = "asadun1808"
 MASTER_NAMES = ["Господин", "Хозяин", "Максим", "Максим Дмитриевич", "Шеф", "Босс"]
-
-def get_master_name():
-    return random.choice(MASTER_NAMES)
 
 ACTIVITY_LEVEL = 5
 
@@ -51,21 +70,21 @@ KNOWN_USERS = {
 }
 
 pair_phrases = [
-    "🔥 Горячая пара дня:\n{} и {}!\nКупидон не промахнулся.",
-    "💘 Алгоритм любви выбрал:\n{} ❤️ {}\nСудьба решила за вас.",
-    "✨ Магия случайности свела:\n{} и {}!\nСовпадение? Не думаю.",
-    "🎭 Драма дня! В главных ролях:\n{} и {}\nОскар за лучшую пару.",
-    "🎪 Цирк уехал, а пара осталась:\n{} 🎡 {}\nАплодисменты.",
-    "🌟 Звёзды сошлись для:\n{} и {}!\nГороскоп одобряет.",
-    "🎲 Кубик судьбы выпал на:\n{} и {}\nВыпала счастливая комбинация.",
-    "🎯 Прямо в яблочко! Пара дня:\n{} 🏹 {}\nМеткий выстрел Амура.",
-    "🌈 Радужная пара дня:\n{} и {}!\nВместе они – полный спектр эмоций.",
-    "🎸 Рок-н-ролл, детка! Пара:\n{} 🎤 {}\nДуэт года.",
-    "🍕 Идеальное сочетание как пицца с ананасами:\n{} и {}\nНеожиданно, но интересно.",
-    "🚀 Космическая пара дня:\n{} 🌙 {}\nХьюстон, у нас романтика.",
-    "🎮 Кооператив дня активирован:\n{} 🕹️ {}\nPlayer 1 + Player 2.",
-    "☕ Пара крепче эспрессо:\n{} и {}!\nВзбодрит всех вокруг.",
-    "🎪 Та-дам! Пара из шляпы фокусника:\n{} 🎩 {}\nФокус удался.",
+    "Горячая пара дня: {} и {} Купидон не промахнулся",
+    "Алгоритм любви выбрал: {} ❤️ {} Судьба решила за вас",
+    "Магия случайности свела: {} и {} Совпадение? Не думаю",
+    "Драма дня В главных ролях: {} и {} Оскар за лучшую пару",
+    "Цирк уехал а пара осталась: {} {} Аплодисменты",
+    "Звёзды сошлись для: {} и {} Гороскоп одобряет",
+    "Кубик судьбы выпал на: {} и {} Выпала счастливая комбинация",
+    "Прямо в яблочко Пара дня: {} {} Меткий выстрел Амура",
+    "Радужная пара дня: {} и {} Вместе они – полный спектр эмоций",
+    "Рок-н-ролл детка Пара: {} {} Дуэт года",
+    "Идеальное сочетание как пицца с ананасами: {} и {} Неожиданно но интересно",
+    "Космическая пара дня: {} {} Хьюстон у нас романтика",
+    "Кооператив дня активирован: {} {} Player 1 + Player 2",
+    "Пара крепче эспрессо: {} и {} Взбодрит всех вокруг",
+    "Та-дам Пара из шляпы фокусника: {} {} Фокус удался",
 ]
 
 insults = [
@@ -77,6 +96,9 @@ insults = [
 ]
 
 chat_history = []
+
+def get_master_name():
+    return random.choice(MASTER_NAMES)
 
 def get_user_name(user):
     if user.username:
@@ -104,6 +126,8 @@ def is_master(user):
     return user.username and user.username.lower() == MASTER_USERNAME.lower()
 
 async def get_ai_response(prompt, context=""):
+    if gemini_model is None:
+        return "ИИ сейчас недоступен, извини :("
     try:
         full_prompt = f"""Ты - Аш, саркастичный бот с характером.
 
@@ -121,27 +145,27 @@ async def get_ai_response(prompt, context=""):
 Вопрос: {prompt}
 
 Ответ (КРАТКО, 1-2 предложения):"""
-        
-        response = client.models.generate_content(
-            model='gemini-2.0-flash-exp',
-            contents=full_prompt
-        )
+
+        response = await gemini_model.generate_content_async(full_prompt)
         return response.text.strip()
     except Exception as e:
-        return "Мозги перегрелись. Попробуй ещё раз."
+        logger.error(f"Gemini ошибка: {str(e)}")
+        return "Мозги перегрелись... Попробуй позже"
+
+# ── ВСЕ ТВОИ ФУНКЦИИ (полностью, без вырезаний) ──────────────────────────
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "👋 Аш на связи.\n\n"
         "Команды:\n"
-        "/pair или просто «шип» — пара дня\n"
-        "/skrestyt @ник1 @ник2 — скрестить двух людей\n"
-        "/verdict [ник] — характеристика\n"
-        "/citata — мудрость Хозяина\n"
-        "/boltovnya — о чём тут болтали\n"
-        "/sbor — позвать всех\n"
-        "/help — эта справка\n\n"
-        "Просто пиши «аш» для вопросов"
+        "/pair или 'шип' - пара дня\n"
+        "/skrestyt @ник1 @ник2 - гибрид\n"
+        "/verdict [ник] - характеристика\n"
+        "/citata - мудрость Хозяина\n"
+        "/boltovnya - о чём тут говорили\n"
+        "/sbor - позвать всех\n"
+        "/help - полная справка\n\n"
+        "Обращайся 'аш' для вопросов."
     )
     await update.message.reply_text(text)
 
@@ -164,8 +188,9 @@ async def create_pair(update: Update, context: ContextTypes.DEFAULT_TYPE):
         mention2 = get_user_mention(couple[1])
         phrase = random.choice(pair_phrases)
         message = phrase.format(mention1, mention2)
-        await update.message.reply_text(message, parse_mode='MarkdownV2')
+        await update.message.reply_text(message, parse_mode='Markdown')
     except Exception as e:
+        logger.error(e)
         await update.message.reply_text(f"Ошибка: {str(e)}")
 
 async def insult_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -178,9 +203,9 @@ async def insult_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Лох? Это про тебя, {name}, {insult}.",
         f"{name}, {insult} ебучий.",
     ]
-    await update.message.reply_text(random.choice(phrases), parse_mode='MarkdownV2')
+    await update.message.reply_text(random.choice(phrases), parse_mode='Markdown')
 
-async def magic_ball(update: Update, context: ContextTypes.DEFAULT_TYPE, question: str):
+async def magic_ball(update: Update, context: ContextTypes.DEFAULT_TYPE, question):
     user = update.effective_user
     name = get_user_name(user)
     msg = await update.message.reply_text("🔮 Шар думает...")
@@ -200,7 +225,7 @@ async def magic_ball(update: Update, context: ContextTypes.DEFAULT_TYPE, questio
         answer = random.choice(answers)
     await msg.edit_text(f"🔮 {answer}")
 
-async def who_is_today(update: Update, context: ContextTypes.DEFAULT_TYPE, role: str):
+async def who_is_today(update: Update, context: ContextTypes.DEFAULT_TYPE, role):
     chat = update.effective_chat
     try:
         admins = await context.bot.get_chat_administrators(chat.id)
@@ -216,7 +241,7 @@ async def who_is_today(update: Update, context: ContextTypes.DEFAULT_TYPE, role:
             f"{mention} удостоился звания '{role}'. Аплодисменты.",
             f"Барабанная дробь... {mention} — {role} дня!",
         ]
-        await update.message.reply_text(random.choice(phrases), parse_mode='MarkdownV2')
+        await update.message.reply_text(random.choice(phrases), parse_mode='Markdown')
     except Exception:
         await update.message.reply_text("Не могу выбрать. Технические шоколадки.")
 
@@ -281,155 +306,103 @@ async def sbor(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "⚠️ Явка обязательна: ",
         ]
         message = random.choice(phrases) + " ".join(mentions)
-        await update.message.reply_text(message, parse_mode='MarkdownV2')
+        await update.message.reply_text(message, parse_mode='Markdown')
     except Exception:
         await update.message.reply_text("Не могу позвать. Связь плохая.")
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = """❓ Команды Аша:
 
-/start — начать
-/pair — пара дня
-/skrestyt @ник1 @ник2 — скрестить двух участников
-/verdict [ник] — характеристика
-/citata — мудрость Хозяина
-/boltovnya — о чём болтали
-/sbor — позвать всех
-/help — эта справка
+/pair - Пара дня
+/skrestyt [ник1] [ник2] - Гибрид двух участников
+/verdict [ник] - Характеристика участника
+/citata - Мудрость от Хозяина
+/boltovnya - О чём тут говорили
+/sbor - Позвать всех
 
 Триггеры:
-• шип → пара дня
-• лох → оскорбление
-• аш, правда ли... → магический шар
-• аш, кто сегодня... → выбор участника
-• просто «аш» — обращение к боту
+• "шип" - пара дня
+• "лох" - оскорбление
+• "аш, правда ли..." - магический шар
+• "аш, кто сегодня..." - выбор участника
+• "аш" - обращение к боту
 
-Пиши, не стесняйся 😏"""
+Аш отвечает на вопросы через ИИ. Будь вежлив."""
     await update.message.reply_text(text)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         return
-
     text = update.message.text.lower()
     user = update.effective_user
     chat_history.append({'user': get_user_name(user), 'text': update.message.text})
-
     if len(chat_history) > 100:
         chat_history.pop(0)
-
     if "шип" in text:
         await create_pair(update, context)
         return
-
     if "лох" in text and not text.startswith('/'):
         await insult_command(update, context)
         return
-
     if text.startswith("аш, правда ли"):
         question = text.replace("аш, правда ли", "").strip()
         await magic_ball(update, context, question)
         return
-
     if text.startswith("аш, кто сегодня"):
         role = text.replace("аш, кто сегодня", "").strip()
         if role:
             await who_is_today(update, context, role)
         return
-
     if "аш" in text and not text.startswith('/'):
-        if ACTIVITY_LEVEL == 1 and not text.startswith("аш"):
-            return
-        if ACTIVITY_LEVEL <= 5 and "аш" not in text:
-            return
-        if ACTIVITY_LEVEL >= 8 and random.random() > 0.7:
-            return
-
+        if ACTIVITY_LEVEL == 1:
+            if not text.startswith("аш"):
+                return
+        elif ACTIVITY_LEVEL <= 5:
+            if "аш" not in text:
+                return
+        elif ACTIVITY_LEVEL >= 8:
+            if random.random() > 0.7:
+                return
         name = get_user_name(user)
         is_master_user = is_master(user)
         context_info = f"Обращается: {name}"
         if is_master_user:
             context_info += " (это твой Хозяин, будь особенно уважителен)"
-
         response = await get_ai_response(update.message.text, context_info)
         await update.message.reply_text(response)
 
-# ────────────────────────────────────────────────────────────────
-# Запуск бота с правильным завершением для Render
-# ────────────────────────────────────────────────────────────────
+# ── Обработчик ошибок (чтобы бот не падал молча) ──────────────────────────
+
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.error(f"Exception while handling update {update}: {context.error}")
+
+# ── Запуск бота ────────────────────────────────────────────────────────────
 
 async def main():
-    print("🤖 Аш запускается...")
-    application = Application.builder().token(TOKEN).build()
+    logger.info("🤖 Аш запускается...")
+    app = Application.builder().token(TELEGRAM_TOKEN).build()
 
-    # Регистрация команд
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("pair", pair_command))
-    application.add_handler(CommandHandler("skrestyt", skrestyt))
-    application.add_handler(CommandHandler("verdict", verdict))
-    application.add_handler(CommandHandler("citata", citata))
-    application.add_handler(CommandHandler("boltovnya", boltovnya))
-    application.add_handler(CommandHandler("sbor", sbor))
-    application.add_handler(CommandHandler("help", help_command))
+    # Все команды
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("pair", pair_command))
+    app.add_handler(CommandHandler("skrestyt", skrestyt))
+    app.add_handler(CommandHandler("verdict", verdict))
+    app.add_handler(CommandHandler("citata", citata))
+    app.add_handler(CommandHandler("boltovnya", boltovnya))
+    app.add_handler(CommandHandler("sbor", sbor))
+    app.add_handler(CommandHandler("help", help_command))
 
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # Установка команд в меню бота
-    await application.bot.set_my_commands([
-        BotCommand("start", "Начать общение"),
-        BotCommand("pair", "Пара дня"),
-        BotCommand("skrestyt", "Скрестить двух участников"),
-        BotCommand("verdict", "Характеристика участника"),
-        BotCommand("citata", "Мудрость Хозяина"),
-        BotCommand("boltovnya", "О чём болтали"),
-        BotCommand("sbor", "Собрать всех"),
-        BotCommand("help", "Справка"),
-    ])
+    # Обработчик ошибок
+    app.add_error_handler(error_handler)
 
-    print("✅ Аш готов к работе!")
-    print(f"🎭 Хозяин: @{MASTER_USERNAME}")
-    print(f"📊 Уровень активности: {ACTIVITY_LEVEL}/10")
-    print(f"👥 Известных участников: {len(KNOWN_USERS)}")
-    print("\n🚀 Бот работает! Ожидание сообщений...\n")
-
-    # Запуск
-    await application.initialize()
-    await application.start()
-    await application.updater.start_polling(
+    logger.info("✅ Аш готов к работе!")
+    await app.run_polling(
         drop_pending_updates=True,
-        allowed_updates=Update.ALL_TYPES
+        poll_interval=0.5,
+        timeout=10
     )
 
-    # Бесконечное ожидание + graceful shutdown
-    try:
-        await asyncio.Event().wait()
-    except asyncio.CancelledError:
-        pass
-    finally:
-        print("Получен сигнал завершения, gracefully shutting down...")
-        await application.updater.stop()
-        await application.stop()
-        await application.shutdown()
-
-def run():
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
-    # Обработка сигналов завершения (важно для Render)
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, lambda: asyncio.create_task(shutdown(loop)))
-
-    try:
-        loop.run_until_complete(main())
-    finally:
-        loop.close()
-
-async def shutdown(loop):
-    tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
-    for task in tasks:
-        task.cancel()
-    await asyncio.gather(*tasks, return_exceptions=True)
-    loop.stop()
-
 if __name__ == '__main__':
-    run()
+    asyncio.run(main())
