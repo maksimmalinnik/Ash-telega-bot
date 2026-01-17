@@ -1,14 +1,23 @@
+python-telegram-bot==20.8
+google-genai
+```
+
+---
+
+## bot.py
+
+```python
 import random
 import re
 import asyncio
 from datetime import datetime
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 # Настройка Gemini AI
-genai.configure(api_key="AIzaSyCD3lMA7zuR7dynDaGEotgU-zCo-wZnQkM")
-model = genai.GenerativeModel('gemini-pro')
+client = genai.Client(api_key="AIzaSyCD3lMA7zuR7dynDaGEotgU-zCo-wZnQkM")
 
 # Токен бота
 TOKEN = "8217181234:AAE7fk3O8Gry41CNZwZDGOvyVOqmEqpJ6ak"
@@ -135,7 +144,10 @@ async def get_ai_response(prompt, context=""):
 
 Ответ (КРАТКО, 1-2 предложения):"""
         
-        response = model.generate_content(full_prompt)
+        response = client.models.generate_content(
+            model='gemini-2.0-flash-exp',
+            contents=full_prompt
+        )
         return response.text.strip()
     except Exception as e:
         return "Мозги перегрелись. Попробуй ещё раз."
@@ -285,14 +297,21 @@ async def verdict(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def quote(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Цитата от Хозяина"""
     quotes = [
-        "Главное — не запутаться в собственных проводах.",
-        "Если что-то работает — не трогай.",
-        "Оптимизм — это недостаток информации.",
-        "Лучше поздно, чем никогда. Но лучше вовремся.",
-        "Кто рано встаёт — тому не спится.",
-        "Не откладывай на завтра то, что можно отложить на послезавтра.",
-        "Порядок на столе — признак больного разума.",
-        "Если проблему можно решить деньгами — это не проблема.",
+        "Грязь — это просто биомасса не на своём месте.",
+        "Порядок в доме начинается с порядка в клетках.",
+        "Если бактерии могут поддерживать гомеостаз, то и ты справишься с уборкой.",
+        "Чистота — это не привычка, это симбиоз с пространством.",
+        "Пыль — враг иммунитета. Тряпка — его союзник.",
+        "В природе нет мусора, есть только круговорот веществ. Но дома — убирай, блять.",
+        "Митохондрии — электростанция клетки. Пылесос — электростанция квартиры.",
+        "Эволюция научила нас адаптироваться. Но к грязи адаптироваться не надо.",
+        "Чистый дом — как здоровый организм: всё функционирует без сбоев.",
+        "Если плесень захватила угол — это не биология, это капитуляция.",
+        "Микробиом кишечника важен. Микробиом на кухне — нет.",
+        "Энтропия стремится к хаосу, но швабра её замедляет.",
+        "В экосистеме дома ты — главный хищник. Охоться на беспорядок.",
+        "Клетка делится, а грязь множится. Действуй на опережение.",
+        "Естественный отбор оставил сильнейших. Уборка оставит чистейших.",
     ]
     
     quote_text = random.choice(quotes)
