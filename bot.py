@@ -4,11 +4,10 @@ import asyncio
 from datetime import datetime
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-import google.generativeai as genai
+from google import genai
 
 # Настройка Gemini AI
-genai.configure(api_key="AIzaSyCD3lMA7zuR7dynDaGEotgU-zCo-wZnQkM")
-model = genai.GenerativeModel('gemini-pro')
+client = genai.Client(api_key="AIzaSyCD3lMA7zuR7dynDaGEotgU-zCo-wZnQkM")
 
 # Токен бота
 TOKEN = "8217181234:AAE7fk3O8Gry41CNZwZDGOvyVOqmEqpJ6ak"
@@ -135,7 +134,10 @@ async def get_ai_response(prompt, context=""):
 
 Ответ (КРАТКО, 1-2 предложения):"""
         
-        response = model.generate_content(full_prompt)
+        response = client.models.generate_content(
+            model='gemini-2.0-flash-exp',
+            contents=full_prompt
+        )
         return response.text.strip()
     except Exception as e:
         return "Мозги перегрелись. Попробуй ещё раз."
