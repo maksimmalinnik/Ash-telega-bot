@@ -13,14 +13,14 @@ from telegram.ext import (
 )
 import google.generativeai as genai
 
-# Логирование — обязательно для Render
+# Логирование — для удобства в Render
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# Ключи из переменных окружения Render (обязательно пропиши их там!)
+# Ключи из переменных окружения Render (обязательно пропиши их!)
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
@@ -32,7 +32,7 @@ if not GEMINI_API_KEY:
 # Настройка Gemini
 try:
     genai.configure(api_key=GEMINI_API_KEY)
-    gemini_model = genai.GenerativeModel('gemini-1.5-flash')
+    gemini_model = genai.GenerativeModel('gemini-1.5-flash')  # актуальная стабильная модель
     logger.info("Gemini успешно подключён")
 except Exception as e:
     logger.critical(f"Ошибка подключения Gemini: {e}")
@@ -152,7 +152,7 @@ async def get_ai_response(prompt, context=""):
         logger.error(f"Gemini ошибка: {str(e)}")
         return "Мозги перегрелись... Попробуй позже"
 
-# ── ВСЕ ТВОИ ФУНКЦИИ (полностью, без вырезаний) ──────────────────────────
+# ── ТВОИ ФУНКЦИИ КОМАНД (все на месте, без изменений в логике) ─────────────
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
