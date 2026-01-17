@@ -1,7 +1,14 @@
 import random
 import asyncio
+import signal
 from telegram import Update, BotCommand
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    MessageHandler,
+    filters,
+    ContextTypes
+)
 from google import genai
 
 # Настройка Gemini AI
@@ -173,7 +180,7 @@ async def insult_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     await update.message.reply_text(random.choice(phrases), parse_mode='MarkdownV2')
 
-async def magic_ball(update: Update, context: ContextTypes.DEFAULT_TYPE, question):
+async def magic_ball(update: Update, context: ContextTypes.DEFAULT_TYPE, question: str):
     user = update.effective_user
     name = get_user_name(user)
     msg = await update.message.reply_text("🔮 Шар думает...")
@@ -193,7 +200,7 @@ async def magic_ball(update: Update, context: ContextTypes.DEFAULT_TYPE, questio
         answer = random.choice(answers)
     await msg.edit_text(f"🔮 {answer}")
 
-async def who_is_today(update: Update, context: ContextTypes.DEFAULT_TYPE, role):
+async def who_is_today(update: Update, context: ContextTypes.DEFAULT_TYPE, role: str):
     chat = update.effective_chat
     try:
         admins = await context.bot.get_chat_administrators(chat.id)
@@ -213,7 +220,7 @@ async def who_is_today(update: Update, context: ContextTypes.DEFAULT_TYPE, role)
     except Exception:
         await update.message.reply_text("Не могу выбрать. Технические шоколадки.")
 
-async def cross_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def skrestyt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) < 2:
         await update.message.reply_text("Укажи двух участников. Пример: /skrestyt @nick1 @nick2")
         return
@@ -347,14 +354,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         response = await get_ai_response(update.message.text, context_info)
         await update.message.reply_text(response)
 
+# ────────────────────────────────────────────────────────────────
+# Запуск бота с правильным завершением для Render
+# ────────────────────────────────────────────────────────────────
+
 async def main():
     print("🤖 Аш запускается...")
     application = Application.builder().token(TOKEN).build()
 
-    # Регистрируем команды (только латиница!)
+    # Регистрация команд
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("pair", pair_command))
-    application.add_handler(CommandHandler("skrestyt", cross_users))
+    application.add_handler(CommandHandler("skrestyt", skrestyt))
     application.add_handler(CommandHandler("verdict", verdict))
     application.add_handler(CommandHandler("citata", citata))
     application.add_handler(CommandHandler("boltovnya", boltovnya))
@@ -363,7 +374,7 @@ async def main():
 
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # Устанавливаем красивые команды в меню бота
+    # Установка команд в меню бота
     await application.bot.set_my_commands([
         BotCommand("start", "Начать общение"),
         BotCommand("pair", "Пара дня"),
@@ -379,9 +390,46 @@ async def main():
     print(f"🎭 Хозяин: @{MASTER_USERNAME}")
     print(f"📊 Уровень активности: {ACTIVITY_LEVEL}/10")
     print(f"👥 Известных участников: {len(KNOWN_USERS)}")
-    print("\n🚀 Бот работает! Ctrl+C для остановки.\n")
+    print("\n🚀 Бот работает! Ожидание сообщений...\n")
 
-    await application.run_polling(drop_pending_updates=True)
+    # Запуск
+    await application.initialize()
+    await application.start()
+    await application.updater.start_polling(
+        drop_pending_updates=True,
+        allowed_updates=Update.ALL_TYPES
+    )
+
+    # Бесконечное ожидание + graceful shutdown
+    try:
+        await asyncio.Event().wait()
+    except asyncio.CancelledError:
+        pass
+    finally:
+        print("Получен сигнал завершения, gracefully shutting down...")
+        await application.updater.stop()
+        await application.stop()
+        await application.shutdown()
+
+def run():
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    # Обработка сигналов завершения (важно для Render)
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, lambda: asyncio.create_task(shutdown(loop)))
+
+    try:
+        loop.run_until_complete(main())
+    finally:
+        loop.close()
+
+async def shutdown(loop):
+    tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+    for task in tasks:
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
+    loop.stop()
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    run()
