@@ -11,34 +11,32 @@ from telegram.ext import (
     filters,
     ContextTypes
 )
-import google.generativeai as genai
+from google import genai
 
-# Логирование — для удобства в Render
+# Логирование
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# Ключи из переменных окружения Render (обязательно пропиши их!)
+# Ключи из переменных окружения (пропиши их в Render!)
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 if not TELEGRAM_TOKEN:
-    raise ValueError("TELEGRAM_TOKEN не задан в переменных окружения Render!")
+    raise ValueError("TELEGRAM_TOKEN не задан!")
 if not GEMINI_API_KEY:
-    raise ValueError("GEMINI_API_KEY не задан в переменных окружения Render!")
+    raise ValueError("GEMINI_API_KEY не задан!")
 
-# Настройка Gemini
+# Gemini
 try:
     genai.configure(api_key=GEMINI_API_KEY)
-    gemini_model = genai.GenerativeModel('gemini-1.5-flash')  # актуальная стабильная модель
-    logger.info("Gemini успешно подключён")
+    model = genai.GenerativeModel('gemini-1.5-flash')
+    logger.info("Gemini подключён")
 except Exception as e:
-    logger.critical(f"Ошибка подключения Gemini: {e}")
-    gemini_model = None
-
-# ── Твои константы ────────────────────────────────────────────────────────
+    logger.critical(f"Gemini ошибка: {e}")
+    model = None
 
 MASTER_USERNAME = "asadun1808"
 MASTER_NAMES = ["Господин", "Хозяин", "Максим", "Максим Дмитриевич", "Шеф", "Босс"]
@@ -126,7 +124,7 @@ def is_master(user):
     return user.username and user.username.lower() == MASTER_USERNAME.lower()
 
 async def get_ai_response(prompt, context=""):
-    if gemini_model is None:
+    if model is None:
         return "ИИ сейчас недоступен, извини :("
     try:
         full_prompt = f"""Ты - Аш, саркастичный бот с характером.
@@ -146,13 +144,11 @@ async def get_ai_response(prompt, context=""):
 
 Ответ (КРАТКО, 1-2 предложения):"""
 
-        response = await gemini_model.generate_content_async(full_prompt)
+        response = await model.generate_content_async(full_prompt)
         return response.text.strip()
     except Exception as e:
         logger.error(f"Gemini ошибка: {str(e)}")
         return "Мозги перегрелись... Попробуй позже"
-
-# ── ТВОИ ФУНКЦИИ КОМАНД (все на месте, без изменений в логике) ─────────────
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
@@ -371,18 +367,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         response = await get_ai_response(update.message.text, context_info)
         await update.message.reply_text(response)
 
-# ── Обработчик ошибок (чтобы бот не падал молча) ──────────────────────────
-
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-    logger.error(f"Exception while handling update {update}: {context.error}")
-
-# ── Запуск бота ────────────────────────────────────────────────────────────
+    logger.error(f"Ошибка: {context.error}")
 
 async def main():
     logger.info("🤖 Аш запускается...")
     app = Application.builder().token(TELEGRAM_TOKEN).build()
 
-    # Все команды
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("pair", pair_command))
     app.add_handler(CommandHandler("skrestyt", skrestyt))
@@ -394,10 +385,9 @@ async def main():
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # Обработчик ошибок
     app.add_error_handler(error_handler)
 
-    logger.info("✅ Аш готов к работе!")
+    logger.info("✅ Готов к работе")
     await app.run_polling(
         drop_pending_updates=True,
         poll_interval=0.5,
