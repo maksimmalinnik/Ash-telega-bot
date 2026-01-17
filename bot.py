@@ -8,7 +8,6 @@ from collections import deque
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import google.genai as genai
-from google.genai.types import HttpOptions
 
 # Настройка логирования
 logging.basicConfig(
@@ -28,9 +27,10 @@ genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel('gemini-2.0-flash-exp')
 
 ACTIVITY_LEVEL = 5
+
 KNOWN_USERS: Dict[str, Any] = {
     "ronietka": "Верона",
-    "fakwul": "Руслан",
+    "fakwul": "Руслан", 
     "bbbaaaannn": "Косинус",
     "anastasiash8": ["Хуянами", "Анастасия"],
     "justyayka": "Айк",
@@ -57,7 +57,7 @@ OWNER_USERNAMES = ["asadun1808"]
 
 EMOJIS = {
     "ronietka": "👩",
-    "fakwul": "👨",
+    "fakwul": "👨", 
     "bbbaaaannn": "📐",
     "anastasiash8": "😜",
     "justyayka": "🤖",
@@ -85,27 +85,40 @@ pair_phrases = [
     "Кто бы подумал, что эти двое сойдутся?",
     "Любовь с первого удара по башке.",
     "Партия века!",
-    "Сладкая парочка."
-    "Мне они не нравятся, но пускай будут"
-    "Пара в которой второй будет изменять"
-    "Мур мур любите друг друга"
-    "Нуу пускай будут эти несчастные"
+    "Сладкая парочка.",
+    "Мне они не нравятся, но пускай будут.",
+    "Пара в которой второй будет изменять.",
+    "Мур мур любите друг друга.",
+    "Нуу пускай будут эти несчастные.",
+    "Вместе они как сперматозоид и яйцеклетка - 50/50 что выйдет хуйня.",
+    "Любовь зла, полюбила и козла.",
+    "Эти двое - как ДНК и РНК, один без другого не работает.",
+    "Пара для выживания в зомби-апокалипсисе.",
+    "Кто-то из них точно будет спать на диване.",
+    "Идеально смотрятся в гробу вдвоем.",
+    "Любовь как мутация - непредсказуемо.",
+    "Эти двое размножаются медленнее амеб.",
+    "Пара для Darwin Award.",
+    "Вместе они как митоз - разделились бы пораньше.",
+    "Сладкая парочка или сладкая катастрофа?",
+    "Эволюционно несовместимы.",
+    "Пара как антибиотики и бактерии - один кого-то убьет.",
+    "Вместе ярче чем флуоресцентные белки."
 ]
 
 insults = [
-    "Руслан, ты лох ебаный!",
+    "Руслан, ты полный хуесос, лох ебаный!",
     "Опять этот лох Руслан выебывается, пиздец.",
     "Руслан - лох, сука, иди нахуй!",
     "Лоху Руслану привет от мамкиной пизды."
 ]
 
-OWNER_ADDRESSES = ["Господин", "Хозяин", "Максим Дмитриевич", "Шеф", "Босс"]
+OWNER_ADDRESSES = ["Господин", "Хозяин", "Максим", "Максим Дмитриевич", "Шеф", "Босс"]
 
-# Глобальное хранилище истории по чатам (chat_id -> deque of messages)
 chat_histories: Dict[int, deque] = {}
 
-async def get_gemini_response(prompt: str, context: str = "") -> str:
-    """Генерация ответа от Gemini."""
+def get_gemini_response(prompt: str, context: str = "") -> str:
+    """СИНХРОННЫЙ Gemini (без async проблем)."""
     full_prompt = f"""Ты - Аш, саркастичный бот с характером.
 
 Личность:
@@ -115,7 +128,7 @@ async def get_gemini_response(prompt: str, context: str = "") -> str:
 - К остальным нейтрален, пока вежливы
 - Используешь биологические сравнения в ~65% ответов
 - Можешь материться если с тобой грубят (кроме Хозяина)
-- Если Хозяин грубит - извиняешься и налаживаешь контакт с ним
+- Если Хозяин грубит - извиняешься и налаживаешь контакт
 
 Контекст: {context}
 
@@ -124,76 +137,73 @@ async def get_gemini_response(prompt: str, context: str = "") -> str:
 Ответ (КРАТКО, 1-2 предложения):"""
     
     try:
-        response = await model.generate_content_async(full_prompt)
+        response = model.generate_content(full_prompt)
         return response.text.strip()
     except Exception as e:
         logger.error(f"Gemini error: {e}")
         return "Мозги барахлят, повтори позже."
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Команда /start."""
-    text = """Привет, я Аш - ИИ-помощник. 
+    text = """Привет, я Аш - саркастичный ИИ-помощник. 
 Упоминай "аш" для болтовни.
 /help - полный список команд."""
     await update.message.reply_text(text)
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Команда /help."""
     help_text = """
-**Команды:**
+**Команды Аша:**
 /start - приветствие
-/pair - случайная пара админов
-/diagnosis [ник] - диагноз юзера
+/pair - случайная пара из участников
+/diagnosis [ник] - диагноз юзера  
 /boltovnya - резюме чата
-/sbor - сбор админов
+/sbor - сбор админов (смайлики)
 /help - это
 
-**Триггеры:** "аш" + вопрос, "лох" для Руслана.
+**Триггеры:** "аш" + вопрос, "лох" = Руслану пиздец, "шип" = пара.
     """
     await update.message.reply_text(help_text, parse_mode='Markdown')
 
 async def pair(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Команда /pair."""
+    """Пара из ЛЮБЫХ участников из KNOWN_USERS."""
     if update.effective_chat.type not in ['group', 'supergroup']:
-        await update.message.reply_text("Только в группах, кретин.")
+        await update.message.reply_text("Только в группах.")
         return
 
-    try:
-        admins = await context.bot.get_chat_administrators(update.effective_chat.id)
-        human_admins = [admin for admin in admins if not admin.user.is_bot]
-        if len(human_admins) < 2:
-            await update.message.reply_text("Мало админов для пары.")
-            return
+    usernames = list(KNOWN_USERS.keys())
+    if len(usernames) < 2:
+        await update.message.reply_text("Мало народу.")
+        return
 
-        admin1, admin2 = random.sample(human_admins, 2)
-        mention1 = admin1.user.mention_html()
-        mention2 = admin2.user.mention_html()
-        
-        phrase = random.choice(pair_phrases)
-        await update.message.reply_text(f"{phrase} {mention1} и {mention2}!")
+    user1, user2 = random.sample(usernames, 2)
+    name1 = KNOWN_USERS[user1]
+    name2 = KNOWN_USERS[user2]
+    
+    phrase = random.choice(pair_phrases)
+    mention1 = f"[{name1}](tg://user?id={user1})"
+    mention2 = f"[{name2}](tg://user?id={user2})"
+    
+    await update.message.reply_text(f"{phrase}
+{mention1} + {mention2}!", parse_mode='Markdown')
 
-        # Описание от Gemini
-        desc_prompt = f"Придумай смешное описание пары {admin1.user.username or admin1.user.first_name} и {admin2.user.username or admin2.user.first_name} (1-2 предложения, иногда негатив, иногда нормально)."
-        desc = await get_gemini_response(desc_prompt)
-        await update.message.reply_text(desc)
-    except Exception as e:
-        logger.error(f"Pair error: {e}")
-        await update.message.reply_text("Что-то сломалось в matchmaking.")
+    # Описание от Gemini
+    desc_prompt = f"Придумай смешное описание пары {name1} и {name2} (1-2 предложения, иногда негатив, иногда нормально)."
+    desc = get_gemini_response(desc_prompt)
+    await update.message.reply_text(desc, parse_mode='Markdown')
 
 async def diagnosis(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Команда /diagnosis."""
-    target_username = context.args[0] if context.args else update.effective_user.username
+    target_username = context.args[0] if context.args else None
     if not target_username:
-        await update.message.reply_text("Ник не найден.")
+        target_username = update.effective_user.username
+    if not target_username or target_username.lower() not in KNOWN_USERS:
+        await update.message.reply_text("Неизвестный юзер.")
         return
 
     target_name = KNOWN_USERS.get(target_username.lower(), target_username)
     prompt = f"Дай краткую характеристику пользователю {target_name} (1-2 предложения, саркастично)."
-    response = await get_gemini_response(prompt)
+    response = get_gemini_response(prompt)
     await update.message.reply_text(response)
 
 async def boltovnya(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Команда /boltovnya."""
     chat_id = update.effective_chat.id
     history = chat_histories.get(chat_id, deque(maxlen=100))
     
@@ -207,30 +217,29 @@ async def boltovnya(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     prompt = f"Кратко (2-3 предложения) и саркастично резюмируй о чём болтали в последних 50 сообщениях: {messages_text}"
     
     try:
-        response = await model.generate_content_async(prompt)
+        response = model.generate_content(prompt)
         await update.message.reply_text(response.text.strip())
     except:
         await update.message.reply_text("Резюме сломалось, беседа и так хуйня.")
 
 async def sbor(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Команда /sbor."""
     if update.effective_chat.type not in ['group', 'supergroup']:
         await update.message.reply_text("Только в группах.")
         return
 
     try:
         admins = await context.bot.get_chat_administrators(update.effective_chat.id)
-        human_admins = [a.user.username for a in admins if not a.user.is_bot and a.user.username in EMOJIS]
-        emojis_list = [EMOJIS[username] for username in human_admins if username in EMOJIS]
+        admin_usernames = [a.user.username for a in admins if a.user.username and a.user.username in EMOJIS and not a.user.is_bot]
+        emojis_list = [EMOJIS[username] for username in admin_usernames]
         
         phrase = random.choice(["Сбор стада: ", "Все на сбор: ", "Админы, бегом: ", "Сигнал тревоги: "])
-        await update.message.reply_text(phrase + " ".join(emojis_list))
+        await update.message.reply_text(phrase + " " + " ".join(emojis_list))
     except Exception as e:
         logger.error(f"Sbor error: {e}")
-        await update.message.reply_text("Сбор провалился.")
+        known_emoji = [EMOJIS[username] for username in EMOJIS if username in OWNER_USERNAMES]
+        await update.message.reply_text("Сбор стада: 👑 " + " ".join(random.sample(list(EMOJIS.values()), min(5, len(EMOJIS)))))
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Обработчик сообщений."""
     message_text = update.message.text or ""
     chat_id = update.effective_chat.id
     user = update.effective_user
@@ -245,74 +254,66 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     user_username = user.username.lower() if user.username else None
     
-    # Лох - оскорбление Руслана
+    # Лох = пиздец Руслану
     if re.search(r'\bлох\b', message_text.lower()):
         insult = random.choice(insults)
         await update.message.reply_text(insult)
         return
 
-    # Проверка активности для "аш"
+    # Аш триггер
     ash_count = message_text.lower().count('аш')
     if ash_count == 0:
         return
     
+    # Уровень активности
     if ACTIVITY_LEVEL < 1 and not message_text.lower().startswith('аш'):
         return
-    elif random.random() < 0.35:  # ~65% шанс ответа для level 5
+    elif random.random() < 0.35:  # 65% ответов
         return
 
     is_owner = user_username in OWNER_USERNAMES
 
     # Магический шар
-    if "аш, правда ли" in message_text.lower():
+    if "правда ли" in message_text.lower():
         thoughts = ["🤔", "😏", "🤨", "💭"]
         await update.message.reply_text(random.choice(thoughts) + " Раздумываю...")
+        await asyncio.sleep(1)
         
         answers = ["Да.", "Нет.", "Возможно.", "А хуй знает.", "Очевидно же!"]
-        sarc = random.random() < 0.15
-        if sarc:
-            await asyncio.sleep(1)
-            resp = await get_gemini_response("Правда ли " + message_text)
+        if random.random() < 0.15:
+            resp = get_gemini_response("Правда ли " + message_text)
         else:
             resp = random.choice(answers)
         await update.message.reply_text(resp)
         return
 
-    # Кто сегодня...
+    # Кто сегодня
     if message_text.lower().startswith("аш, кто сегодня"):
-        try:
-            admins = await context.bot.get_chat_administrators(chat_id)
-            human_admins = [a.user for a in admins if not a.user.is_bot]
-            if not human_admins:
-                await update.message.reply_text("Нет админов.")
-                return
-            chosen = random.choice(human_admins).mention_html()
-            role = message_text.split("сегодня")[-1].strip() or "идиот"
-            await update.message.reply_text(f"Сегодня {role}: {chosen}")
-        except:
-            await update.message.reply_text("Не могу выбрать.")
+        usernames = list(KNOWN_USERS.keys())
+        if not usernames:
+            await update.message.reply_text("Никого нет.")
+            return
+        chosen_user = random.choice(usernames)
+        chosen_name = KNOWN_USERS[chosen_user]
+        role = message_text.lower().split("сегодня")[-1].strip(" .,!?") or "идиот"
+        await update.message.reply_text(f"Сегодня {role}: [{chosen_name}](tg://user?id={chosen_user})", parse_mode='Markdown')
         return
 
-    # Обычный запрос к Ашу
+    # Обычный Аш
     username_str = f"@{user.username}" if user.username else user.first_name or ""
-    context_str = f"Пользователь: {username_str}. Чат: {update.effective_chat.title or 'личный'}."
-    if is_owner:
-        context_str += " Это Хозяин!"
+    context_str = f"Пользователь: {username_str}. Чат: {update.effective_chat.title or 'личный'}. {'Это Хозяин!' if is_owner else ''}"
     
-    prompt = message_text.replace("аш", "").strip()
-    response = await get_gemini_response(prompt, context_str)
+    prompt = re.sub(r'^ашs*,?s*', '', message_text, flags=re.IGNORECASE).strip()
+    response = get_gemini_response(prompt, context_str)
     
     await update.message.reply_text(response)
 
 async def ship_trigger(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Триггер шип."""
     await pair(update, context)
 
 def main() -> None:
-    """Запуск бота."""
     application = Application.builder().token(TELEGRAM_TOKEN).build()
 
-    # Команды
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("pair", pair))
@@ -320,11 +321,10 @@ def main() -> None:
     application.add_handler(CommandHandler("boltovnya", boltovnya))
     application.add_handler(CommandHandler("sbor", sbor))
 
-    # Триггеры
-    application.add_handler(MessageHandler(filters.Regex(r'шип'), ship_trigger))
+    application.add_handler(MessageHandler(filters.Regex(r'шип', re.IGNORECASE), ship_trigger))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    logger.info("Запуск Аша...")
+    logger.info("🚀 Аш запущен!")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':
