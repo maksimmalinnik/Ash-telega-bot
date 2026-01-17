@@ -1,12 +1,3 @@
-python-telegram-bot==20.8
-google-genai
-```
-
----
-
-## bot.py
-
-```python
 import random
 import re
 import asyncio
