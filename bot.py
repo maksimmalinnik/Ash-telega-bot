@@ -4,10 +4,11 @@ import asyncio
 from datetime import datetime
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-from google import genai
+import google.generativeai as genai
 
 # Настройка Gemini AI
-client = genai.Client(api_key="AIzaSyCD3lMA7zuR7dynDaGEotgU-zCo-wZnQkM")
+genai.configure(api_key="AIzaSyCD3lMA7zuR7dynDaGEotgU-zCo-wZnQkM")
+model = genai.GenerativeModel('gemini-pro')
 
 # Токен бота
 TOKEN = "8217181234:AAE7fk3O8Gry41CNZwZDGOvyVOqmEqpJ6ak"
@@ -93,7 +94,7 @@ def get_user_name(user):
         if username_lower in KNOWN_USERS:
             known = KNOWN_USERS[username_lower]
             if isinstance(known, list):
-                return known[0]  # Первое имя
+                return known[0]
             return known
         return f"@{user.username}"
     name = user.first_name
@@ -122,7 +123,7 @@ async def get_ai_response(prompt, context=""):
 Личность:
 - Отвечаешь КРАТКО (1-2 предложения максимум)
 - Саркастичный, но не злой
-- Уважаешь Хозяина (@asadun1808 - Максим Дмитриевич). К нему обращаешься по-разному: "Господин", "Хозяин", "Максим", "Максим Дмитриевич", "Шеф" или "Босс" - варьируй, но без перебора лести
+- Уважаешь Хозяина (@asadun1808 - Максим Дмитриевич). К нему обращаешься по-разному: "Господин", "Хозяин", "Максим", "Максим Дмитриевич", "Шеф" или "Босс" - варьируй
 - К остальным нейтрален, пока вежливы
 - Используешь биологические сравнения в ~65% ответов
 - Можешь материться если с тобой грубят (кроме Хозяина)
@@ -134,10 +135,7 @@ async def get_ai_response(prompt, context=""):
 
 Ответ (КРАТКО, 1-2 предложения):"""
         
-        response = client.models.generate_content(
-            model='gemini-2.0-flash-exp',
-            contents=full_prompt
-        )
+        response = model.generate_content(full_prompt)
         return response.text.strip()
     except Exception as e:
         return "Мозги перегрелись. Попробуй ещё раз."
@@ -209,14 +207,12 @@ async def magic_ball(update: Update, context: ContextTypes.DEFAULT_TYPE, questio
     user = update.effective_user
     name = get_user_name(user)
     
-    # Анимация думания
     msg = await update.message.reply_text("🔮 Шар думает...")
     await asyncio.sleep(1.5)
     await msg.edit_text("✨ Советуюсь со звёздами...")
     await asyncio.sleep(1.5)
     
-    # Ответы
-    if random.random() < 0.15:  # 15% шанс на грубый ответ
+    if random.random() < 0.15:
         answer = f"{name}, как ты додумался меня спросить о такой хуйне?"
     else:
         answers = [
@@ -244,7 +240,6 @@ async def who_is_today(update: Update, context: ContextTypes.DEFAULT_TYPE, role)
         
         chosen = random.choice(participants)
         mention = get_user_mention(chosen)
-        name = get_user_name(chosen)
         
         phrases = [
             f"{mention} сегодня {role}. Поздравляю.",
@@ -297,11 +292,6 @@ async def quote(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Эволюция научила нас адаптироваться. Но к грязи адаптироваться не надо.",
         "Чистый дом — как здоровый организм: всё функционирует без сбоев.",
         "Если плесень захватила угол — это не биология, это капитуляция.",
-        "Микробиом кишечника важен. Микробиом на кухне — нет.",
-        "Энтропия стремится к хаосу, но швабра её замедляет.",
-        "В экосистеме дома ты — главный хищник. Охоться на беспорядок.",
-        "Клетка делится, а грязь множится. Действуй на опережение.",
-        "Естественный отбор оставил сильнейших. Уборка оставит чистейших.",
     ]
     
     quote_text = random.choice(quotes)
@@ -375,7 +365,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.lower()
     user = update.effective_user
     
-    # Сохраняем в историю
     chat_history.append({
         'user': get_user_name(user),
         'text': update.message.text
@@ -383,43 +372,34 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(chat_history) > 100:
         chat_history.pop(0)
     
-    # Триггер "шип"
     if "шип" in text:
         await create_pair(update, context)
         return
     
-    # Триггер "лох"
     if "лох" in text and not text.startswith('/'):
         await insult_command(update, context)
         return
     
-    # Магический шар
     if text.startswith("аш, правда ли"):
         question = text.replace("аш, правда ли", "").strip()
         await magic_ball(update, context, question)
         return
     
-    # Кто сегодня
     if text.startswith("аш, кто сегодня"):
         role = text.replace("аш, кто сегодня", "").strip()
         if role:
             await who_is_today(update, context, role)
         return
     
-    # Обращение к Ашу
     if "аш" in text and not text.startswith('/'):
-        # Проверяем активность
         if ACTIVITY_LEVEL == 1:
-            # Отвечает только на прямое обращение
             if not text.startswith("аш"):
                 return
         elif ACTIVITY_LEVEL <= 5:
-            # Средняя активность - отвечает когда упоминают
             if "аш" not in text:
                 return
         elif ACTIVITY_LEVEL >= 8:
-            # Высокая активность - отвечает часто
-            if random.random() > 0.7:  # 70% шанс ответить
+            if random.random() > 0.7:
                 return
         
         name = get_user_name(user)
@@ -437,7 +417,6 @@ def main():
     print("🤖 Аш запускается...")
     app = Application.builder().token(TOKEN).build()
     
-    # Команды
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("pair", pair_command))
     app.add_handler(CommandHandler("скрестить", cross_users))
@@ -447,8 +426,6 @@ def main():
     app.add_handler(CommandHandler("сбор", call_everyone))
     app.add_handler(CommandHandler("собрание", call_everyone))
     app.add_handler(CommandHandler("аш_помощь", help_command))
-    
-    # Обработчик всех сообщений
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     print("✅ Аш готов к работе!")
